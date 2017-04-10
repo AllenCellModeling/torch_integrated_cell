@@ -19,7 +19,6 @@ local function weights_init(m)
 end
 
 
-
 function Model:create(opts)
     self.scale_factor = 8/(512/opts.imsize)
     self.ganNoise = opts.ganNoise or 0.01
@@ -31,9 +30,6 @@ function Model:create(opts)
     self.nChOut = opts.nChOut
     self.nOther = opts.nOther
     
-    self.fullConv = opts.fullConv
-    
-    self.dropoutRate = opts.dropoutRate
     
     Model:createAutoencoder()
     Model:createAdversary()
@@ -75,7 +71,6 @@ function Model:createAutoencoder()
     self.encoder:add(nn.View(1024*scale*scale))  
     self.encoder:add(nn.PReLU())
     
-    
     encoder_out = nn.ConcatTable()
         
     if self.nClasses > 0 then
@@ -116,10 +111,6 @@ function Model:createAutoencoder()
     self.decoder:add(nn.JoinTable(-1))
     self.decoder:add(nn.Linear(self.nClasses + self.nOther + self.nLatentDims, 1024*scale*scale))
     self.decoder:add(nn.View(1024, scale, scale))
-    
-    -- -- input is Z, going into a convolution
-    -- self.decoder:add(nn.SpatialFullConvolution(self.nClasses + self.nOther + self.nLatentDims, 1024, 4, 4, 1, 1))
-    -- self.decoder:add(nn.SpatialBatchNormalization(1024))
     
     self.decoder:add(nn.PReLU())    
     self.decoder:add(nn.SpatialFullConvolution(1024, 1024, 4, 4, 2, 2, 1, 1))
@@ -184,8 +175,6 @@ function Model:createAdversaryGen()
     noise = self.ganNoise
     ndf = 64
     
-    -- l1weight = 0.001
-    
     scale = self.scale_factor
     
     self.adversaryGen = nn.Sequential()
@@ -232,30 +221,18 @@ function Model:createAdversaryGen()
     end
 
     if self.nClasses > 0 then
-        -- output for the class label
-        
-        
         self.adversaryGen:add(nn.View(ndf * 8 * scale*2 * scale*2))
         self.adversaryGen:add(nn.Linear(ndf * 8 * scale*2 * scale*2, self.nClasses+1))
-        
-        -- self.adversaryGen:add(nn.SpatialConvolution(ndf * 8, self.nClasses+1, 4, 4))
-        -- self.adversaryGen:add(nn.View(self.nClasses+1))
-        -- self.adversaryGen:add(nn.BatchNormalization(self.nClasses+1))
         self.adversaryGen:add(nn.LogSoftMax())
     else
         
         self.adversaryGen:add(nn.View(ndf * 8 * scale*2 * scale*2))
         self.adversaryGen:add(nn.Linear(ndf * 8 * scale*2 * scale*2, 1))
         
-        -- self.adversaryGen:add(nn.SpatialConvolution(ndf * 8, 16, 4, 4, 1, 1))
-        -- self.adversaryGen:add(nn.BatchNormalization(1))
-        -- self.adversaryGen:add(nn.LeakyReLU(0.2, true))
-        -- self.adversaryGen:add(nn.View(1))
         self.adversaryGen:add(nn.Sigmoid())
     end
     
     self.adversaryGen:apply(weights_init)
-
 end
 
 
