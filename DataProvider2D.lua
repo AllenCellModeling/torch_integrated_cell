@@ -8,22 +8,16 @@ local DataProvider = {
     opts = nil
 }
 
-function DataProvider.create(image_dir, opts)
+function DataProvider.create(imageDir, dataSavePath, opts)
     
-    local save_dir = opts.parent_dir
-    
-    local data_file = save_dir .. '/data.t7'
-    local labels_file = save_dir .. '/labels.t7'
-    local data_info_file = save_dir .. '/data_info.t7'
-
     local data
     local labels
     local data_info
     
     local data = {}
-    if paths.filep(data_file) then
-        print('Loading data from ' .. save_dir)
-        data = torch.load(data_file)
+    if paths.filep(dataSavePath) then
+        print('Loading data from ' .. dataSavePath)
+        data = torch.load(dataSavePath)
         
         print('Done')
     else
@@ -31,10 +25,18 @@ function DataProvider.create(image_dir, opts)
         local c = 0
         local images, image_paths, classes = {}, {}, {}
         
-        for dir in paths.iterdirs(image_dir) do
-            print('Loading images from ' .. image_dir .. '/' .. dir)
+        dirs = {}
+        for dir in paths.iterdirs(imageDir) do
+            dirs[#dirs+1] = dir
+        end
+        
+        dirs = utils.alphanumsort(dirs)
+        
+        for i = 1,#dirs do
+            dir = dirs[i]
+            print('Loading images from ' .. imageDir .. '/' .. dir)
 
-            local images_tmp, image_paths_tmp = imtools.load_img(image_dir .. '/' .. dir .. '/', 'png', opts.image_sub_size)
+            local images_tmp, image_paths_tmp = imtools.load_img(imageDir .. '/' .. dir .. '/', 'png', opts.image_sub_size)
 
             for i = 1,#image_paths_tmp do
                 c = c+1
@@ -61,7 +63,6 @@ function DataProvider.create(image_dir, opts)
         local rand_inds = torch.randperm(nImgs):long()
         local nTest = torch.round(nImgs/20)
 
-
         data.train = {}
         data.train.inds = rand_inds[{{nTest+1,-1}}]
         data.train.images = images:index(1, data.train.inds)
@@ -74,10 +75,8 @@ function DataProvider.create(image_dir, opts)
 
         data.image_paths = image_paths
         data.classes = classes
-
-        paths.mkdir(save_dir)
         
-        torch.save(data_file, data)
+        torch.save(dataSavePath, data)
     end
 
     local self = data
