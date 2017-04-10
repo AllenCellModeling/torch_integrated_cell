@@ -10,13 +10,6 @@ function imtools.load_img(im_dir, im_pattern, im_scale)
     if im_scale == nil then
         im_scale = 1;
     end
-    -- find the index of the last file seperator
-    
---     tmp, ind = im_path:reverse():find('/')
---     ind = im_path:len() - ind + 1
-
---     im_dir = im_path:sub(1,ind)
---     im_path = im_path:sub(ind, -1)
 
     local p = {}
     local c = 1
@@ -30,8 +23,7 @@ function imtools.load_img(im_dir, im_pattern, im_scale)
     local p = utils.alphanumsort(p)
     
     local im_tmp = image.load(p[1], 3, 'double')
-    -- img_tmp = torch.DoubleTensor(img_tmp:size()):copy(img_tmp)
-    
+
     local im_size_tmp = im_tmp:size()
 
     local im_size = torch.LongStorage(4)
