@@ -40,7 +40,7 @@ function optim_step(net, loss, optParam, optStates)
             c = c+1
         end
 
-        cutorch.setDevice(gpu1)
+        cutorch.setDevice(opts.gpu1)
     end
 end
 
@@ -76,8 +76,8 @@ function learner.loop(nIn)
     local dAdvDz = function(params)
         adversary:zeroGradParameters()
 
-        local input = torch.Tensor(opt.batchSize, model_opts.nLatentDims):normal(0, 1):typeAs(x_in)
-        local label = torch.ones(opt.batchSize):typeAs(x_in) -- Labels for real samples
+        local input = torch.Tensor(opts.batchSize, opts.nLatentDims):normal(0, 1):typeAs(x_in)
+        local label = torch.ones(opts.batchSize):typeAs(x_in) -- Labels for real samples
 
         local output = adversary:forward(input)
         local errEnc_real = criterion_adv:forward(output, label)
@@ -86,7 +86,7 @@ function learner.loop(nIn)
 
         codes = encoder:forward(x_in)
         local input = codes[#codes]
-         label = torch.zeros(opt.batchSize):typeAs(x_in) -- Labels for generated samples
+         label = torch.zeros(opts.batchSize):typeAs(x_in) -- Labels for generated samples
 
          output = adversary:forward(input)
         local errEnc_fake = criterion_adv:forward(output, label)
@@ -102,10 +102,10 @@ function learner.loop(nIn)
         adversaryGen:zeroGradParameters()
 
         input = x_out
-        if model_opts.nClasses > 0 then
+        if opts.nClasses > 0 then
             label = classLabel
         else
-            label = torch.ones(opt.batchSize):typeAs(x_in) 
+            label = torch.ones(opts.batchSize):typeAs(x_in) 
         end
         
         local output = adversaryGen:forward(input)
@@ -115,23 +115,23 @@ function learner.loop(nIn)
 
         zFake = {}
         c = 1
-        if model_opts.nClasses > 0 then
+        if opts.nClasses > 0 then
             zFake[c] = classLabelOneHot
             c = c+1
         end
-        if model_opts.nOther > 0 then
+        if opts.nOther > 0 then
             zFake[c] = code
             c = c+1
         end
         
-        zFake[c] = torch.Tensor(opt.batchSize, model_opts.nLatentDims):normal(0, 1):typeAs(x_in)
+        zFake[c] = torch.Tensor(opts.batchSize, opts.nLatentDims):normal(0, 1):typeAs(x_in)
 
         input = decoder:forward(zFake)
         
-        if model_opts.nClasses > 0 then
-            label = torch.Tensor(opt.batchSize):typeAs(x_in):fill(model_opts.nClasses+1)
+        if opts.nClasses > 0 then
+            label = torch.Tensor(opts.batchSize):typeAs(x_in):fill(opts.nClasses+1)
         else
-            label = torch.zeros(opt.batchSize):typeAs(x_in) 
+            label = torch.zeros(opts.batchSize):typeAs(x_in) 
         end
 
         local output = adversaryGen:forward(input)
@@ -145,19 +145,12 @@ function learner.loop(nIn)
     end
     
     local dAutoencoderDx = function(params)
-        -- if thetaEnc ~= params then
-        --     thetaEnc:copy(params)
-        -- end
-
         encoder:zeroGradParameters()
-        -- decoder:zeroGradParameters()
-        -- adversary:zeroGradParameters()
         
         -- the encoder has already gone forward
         xHat = decoder:forward(codes)
 
-        -- Versus criterion
-        -- x_out = nn.ReLU(true):cuda():forward(x_out)
+
         
         reconLoss = criterion_out:forward(xHat, x_out)
         loss = reconLoss
@@ -175,7 +168,7 @@ function learner.loop(nIn)
         labelLoss = 0
         shapeLoss = 0
 
-        if model_opts.nClasses > 0 then
+        if opts.nClasses > 0 then
             local labelHat = encoder_out[c]
 
             labelLoss = criterion_label:forward(labelHat, classLabel)
@@ -187,7 +180,7 @@ function learner.loop(nIn)
             c = c+1
         end
 
-        if model_opts.nOther > 0 then
+        if opts.nOther > 0 then
             local shapeHat = encoder_out[c]
             shapeLoss = criterion_other:forward(shapeHat, code)
             local shapeGradLoss = criterion_other:backward(shapeHat, code)
@@ -198,13 +191,13 @@ function learner.loop(nIn)
             c = c+1
         end
 
-        local yReal = torch.ones(opt.batchSize):typeAs(x_in)
+        local yReal = torch.ones(opts.batchSize):typeAs(x_in)
         -- Train autoencoder (generator) to play a minimax game with the adversary (discriminator): min_G max_D log(1 - D(G(x)))
         local predFake = adversary:forward(encoder.output[c])
         minimaxLoss = criterion_adv:forward(predFake, yReal)
         local gradMinimaxLoss = criterion_adv:backward(predFake, yReal)
         local gradMinimax = adversary:updateGradInput(encoder.output[c], gradMinimaxLoss) -- Do not calculate gradient wrt adversary parameters
-        gradLosses[c] = gradMinimax*model_opts.advLatentRatio
+        gradLosses[c] = gradMinimax*opts.advLatentRatio
 
         -- gradLosses[c] = nn.Clip(-1, 1):cuda():forward(gradLosses[c])
         
@@ -227,10 +220,10 @@ function learner.loop(nIn)
        local fake = netG:forward(noise)
        input:copy(fake) ]]--
         label = nil
-        if model_opts.nClasses > 0 then
+        if opts.nClasses > 0 then
             label = classLabel
         else
-            label = torch.ones(opt.batchSize):typeAs(x_in) 
+            label = torch.ones(opts.batchSize):typeAs(x_in) 
         end
         
        local output = adversaryGen.output -- netD:forward(input) was already executed in fDx, so save computation
@@ -240,7 +233,7 @@ function learner.loop(nIn)
 
         adversaryGen:clearState()
         
-       decoder:backward(zFake, df_dg*model_opts.advGenRatio)
+       decoder:backward(zFake, df_dg*opts.advGenRatio)
        return minimaxDecLoss, gradParametersG
         
     end
@@ -251,10 +244,10 @@ function learner.loop(nIn)
        noise:uniform(-1, 1) -- regenerate random noise
        local fake = netG:forward(noise)
        input:copy(fake) ]]--
-        if model_opts.nClasses > 0 then
+        if opts.nClasses > 0 then
             label = classLabel
         else
-            label = torch.ones(opt.batchSize):typeAs(x_in) 
+            label = torch.ones(opts.batchSize):typeAs(x_in) 
         end
         
         -- local xHat = decoder:forward(codes)
@@ -264,7 +257,7 @@ function learner.loop(nIn)
        local df_do = criterion:backward(output, label)
        df_dg = adversaryGen:updateGradInput(xHat, df_do)
 
-       decoder:backward(codes, df_dg*model_opts.advGenRatio)
+       decoder:backward(codes, df_dg*opts.advGenRatio)
        return minimaxDecLoss, gradParametersG
         
     end    
@@ -273,14 +266,14 @@ function learner.loop(nIn)
     local ndat = nIn or dataProvider.train.inds:size()[1]
     -- main loop
     print("Starting learning")
-    while opt.epoch < opt.nepochs do
+    while opts.epoch < opts.nepochs do
         local tic = torch.tic()
         
-        opt.epoch = opt.epoch+1
+        opts.epoch = opts.epoch+1
 
-        local indices = torch.randperm(ndat):long():split(opt.batchSize)
+        local indices = torch.randperm(ndat):long():split(opts.batchSize)
         indices[#indices] = nil
-        local N = #indices * opt.batchSize
+        local N = #indices * opts.batchSize
 
         for t,v in ipairs(indices) do
             collectgarbage()
@@ -291,7 +284,7 @@ function learner.loop(nIn)
             x_out = x_out:cuda()
             
             
-            if model_opts.nOther > 0 then
+            if opts.nOther > 0 then
                 classLabelOneHot = dataProvider:getLabels(v, 'train'):cuda()
                 __, classLabel = torch.max(classLabelOneHot, 2)
                 classLabel = torch.squeeze(classLabel:typeAs(x_in))
@@ -301,14 +294,13 @@ function learner.loop(nIn)
 
             end
 
-            if model_opts.nClasses > 0 then
+            if opts.nClasses > 0 then
                 code = dataProvider:getCodes(v, 'train')
             end
 
-            -- decoder:zeroGradParameters()
-            -- update the decoder's advarsary
-            
-            if model_opts.useGanD then
+
+            -- update the decoder's advarsary            
+            if opts.useGanD then
                 dAdvGenDx()            
                 optim_step(adversaryGen, advGenLoss, optAdvGen, stateAdvGen)
             end
@@ -318,22 +310,19 @@ function learner.loop(nIn)
             optim_step(adversary, advLoss, optAdv, stateAdv)
             adversary:clearState()
             
-            if model_opts.useGanD then
+            if opts.useGanD then
                 dDecdAdvGen()
             end
             dAutoencoderDx()
-            -- codes = utils.shallowcopy(codes)
-            -- encoder:clearState()
+
             
-            if model_opts.useGanD then
+            if opts.useGanD then
                 dDecdAdvGen2()
             end
             
             optim_step(encoder, loss, optEnc, stateEnc)
             optim_step(decoder, reconLoss+minimaxDecLoss+minimaxDecLoss2, optDec, stateDec)
             
-
-
             losses[#losses + 1] = reconLoss
             latentlosses[#latentlosses+1] = latentLoss
             reencodelosses[#reencodelosses+1] = reencodeLoss
@@ -342,8 +331,7 @@ function learner.loop(nIn)
             
             advMinimaxLoss[#advMinimaxLoss + 1] = minimaxLoss
             advGenMinimaxLoss[#advGenMinimaxLoss + 1] = minimaxDecLoss+minimaxDecLoss2
-            
-                        
+             
             encoder:clearState()
             decoder:clearState()
             adversaryGen:clearState()
@@ -353,16 +341,16 @@ function learner.loop(nIn)
 
         x_in, x_out = nil, nil
 
-        recon_loss = torch.mean(torch.Tensor(losses)[{{-#indices,-1}}]);
-        latent_loss = torch.mean(torch.Tensor(latentlosses)[{{#indices, -1}}])
-        reencode_loss = torch.mean(torch.Tensor(reencodelosses)[{{#indices, -1}}])
+        recon_loss =          torch.mean(torch.Tensor(losses)[{{-#indices,-1}}]);
+        latent_loss =         torch.mean(torch.Tensor(latentlosses)[{{#indices, -1}}])
+        reencode_loss =       torch.mean(torch.Tensor(reencodelosses)[{{#indices, -1}}])
 
-        adv_loss = torch.mean(torch.Tensor(advlosses)[{{-#indices,-1}}]);
-        advGen_loss = torch.mean(torch.Tensor(advGenLosses)[{{-#indices,-1}}]);
+        adv_loss =            torch.mean(torch.Tensor(advlosses)[{{-#indices,-1}}]);
+        advGen_loss =         torch.mean(torch.Tensor(advGenLosses)[{{-#indices,-1}}]);
         minimax_latent_loss = torch.mean(torch.Tensor(advMinimaxLoss)[{{-#indices,-1}}]);
-        minimax_gen_loss = torch.mean(torch.Tensor(advGenMinimaxLoss)[{{-#indices,-1}}]);
+        minimax_gen_loss =    torch.mean(torch.Tensor(advGenMinimaxLoss)[{{-#indices,-1}}]);
 
-        print('Epoch ' .. opt.epoch .. '/' .. opt.nepochs .. ' Recon loss: ' .. recon_loss .. ' Adv loss: ' .. adv_loss .. ' AdvGen loss: ' .. advGen_loss .. ' time: ' .. torch.toc(tic))
+        print('Epoch ' .. opts.epoch .. '/' .. opts.nepochs .. ' Recon loss: ' .. recon_loss .. ' Adv loss: ' .. adv_loss .. ' AdvGen loss: ' .. advGen_loss .. ' time: ' .. torch.toc(tic))
         print(minimax_latent_loss)
         print(minimax_gen_loss)
 
@@ -380,11 +368,11 @@ function learner.loop(nIn)
         plots[#plots + 1] = {'MinimaxAdvGen', torch.linspace(1, #advGenMinimaxLoss, #advGenMinimaxLoss), torch.Tensor(advGenMinimaxLoss), '-'}
         plots[#plots + 1] = {'Reencode', torch.linspace(1, #reencodelosses, #reencodelosses), torch.Tensor(reencodelosses), '-'}
 
-        if opt.epoch % opt.saveProgressIter == 0 then
+        if opts.epoch % opts.saveProgressIter == 0 then
             
             encoder:evaluate()
             decoder:evaluate()
-            rotate_tmp = model_opts.rotate
+            rotate_tmp = opts.rotate
             dataProvider.opts.rotate = false
 
             local x_in, x_out = dataProvider:getImages(torch.linspace(1,10,10):long(), 'train')
@@ -395,95 +383,77 @@ function learner.loop(nIn)
             
             local reconstructions = torch.cat(recon_train, recon_test,2)
 
-            image.save(model_opts.save_dir .. '/progress.png', reconstructions)
+            image.save(opts.saveDir .. '/progress.png', reconstructions)
 
             embeddings = {}
-            embeddings.train = torch.zeros(ndat, model_opts.nLatentDims)
+            traintest = {'train', 'test'}
             
-            indices = torch.linspace(1,ndat,ndat):long():split(opt.batchSize)
+            for i = 1,#traintest do
+                train_or_test = traintest[i]
+            
+                local ndat = dataProvider[train_or_test].inds:size()[1]
 
-            start = 1
-            for t,v in ipairs(indices) do
-                collectgarbage()
-                stop = start + v:size(1) - 1
+                embeddings[train_or_test] = torch.zeros(ndat, opts.nLatentDims)
+                local indices = torch.linspace(1,ndat,ndat):long():split(opts.batchSize)
 
-                x_in = dataProvider:getImages(v, 'train')
-                -- Forward pass
-                x_in = x_in:cuda()
+                local start = 1
+                for t,v in ipairs(indices) do
+                    collectgarbage()
+                    local stop = start + v:size(1) - 1
 
-                codes = encoder:forward(x_in)
-                embeddings.train:sub(start, stop, 1,model_opts.nLatentDims):copy(codes[#codes])
-                
-                start = stop + 1
+                    local x_in = dataProvider:getImages(v, train_or_test)
+                    local x_in = x_in:cuda()
+
+                    local codes = encoder:forward(x_in)
+                    embeddings[train_or_test]:sub(start, stop, 1,opts.nLatentDims):copy(codes[#codes])
+
+                    start = stop + 1
+                end
             end
-
-            ntest = dataProvider.test.inds:size()[1]
-            embeddings.test = torch.zeros(ntest, model_opts.nLatentDims)
-            indices = torch.linspace(1,ntest,ntest):long():split(opt.batchSize)
-            
-            start = 1
-            for t,v in ipairs(indices) do
-                collectgarbage()
-                stop = start + v:size(1) - 1
-
-                x_in = dataProvider:getImages(v, 'test')
-                -- Forward pass
-                x_in = x_in:cuda()
-
-                codes = encoder:forward(x_in)
-
-               embeddings.test:sub(start, stop, 1,model_opts.nLatentDims):copy(codes[#codes])
-                
-                start = stop + 1
-            end
-            
-            x_in = nil
             
             dataProvider.opts.rotate = rotate_tmp
 
             encoder:training()
             decoder:training()          
 
-            torch.save(model_opts.save_dir .. '/progress_embeddings.t7', embeddings, 'binary', false)
+            torch.save(opts.save.tmpEmbeddings, embeddings)
             embeddings = nil
             
-            torch.save(model_opts.save_dir .. '/plots_tmp.t7', plots, 'binary', false)
-            torch.save(model_opts.save_dir .. '/epoch_tmp.t7', opt.epoch, 'binary', false)
+            torch.save(opts.save.tmpPlots, plots)
+            torch.save(opts.save.tmpEpoch, opts.epoch)
         end
             
-        if opt.epoch % opt.saveStateIter == 0 then
+        if opts.epoch % opts.saveStateIter == 0 then
             print('Saving model.')
             
             -- save the optimizer states
-            torch.save(stateAdv_path, utils.table2float(stateAdv), 'binary', false)
-            torch.save(stateAdvGen_path, utils.table2float(stateAdvGen), 'binary', false)
-            
-            torch.save(stateEnc_path, utils.table2float(stateEnc), 'binary', false)
-            torch.save(stateDec_path, utils.table2float(stateDec), 'binary', false)
-            
+            torch.save(opts.save.stateEnc, utils.table2float(stateEnc))
+            torch.save(opts.save.stateDec, utils.table2float(stateDec))            
+            torch.save(opts.save.stateEncD, utils.table2float(stateAdv))
+            torch.save(opts.save.stateDecD, utils.table2float(stateAdvGen))
             
             -- save the options
-            torch.save(opt_path, opt, 'binary', false)
-            torch.save(optEnc_path, optEnc, 'binary', false)
-            torch.save(optDec_path, optDec, 'binary', false)
-            torch.save(optAdv_path, optAdv, 'binary', false)
-            torch.save(optAdvGen_path, optAdvGen, 'binary', false)            
+            torch.save(opts.save.opts, opts)
+            torch.save(opts.save.optEnc, optEnc)
+            torch.save(opts.save.optDec, optDec)
+            torch.save(opts.save.optEncD, optAdv)
+            torch.save(opts.save.optDecD, optAdvGen)  
             
             decoder:clearState()
             encoder:clearState()
             adversary:clearState()
             adversaryGen:clearState()            
             
-            torch.save(model_opts.save_dir .. '/plots.t7', plots, 'binary', false)
-            torch.save(model_opts.save_dir .. '/epoch.t7', opt.epoch, 'binary', false)
+            torch.save(opts.save.plots, plots)
+            torch.save(opts.save.epoch, opts.epoch)
             
-            torch.save(model_opts.save_dir .. '/decoder.t7', decoder:float(), 'binary', false)
-            torch.save(model_opts.save_dir .. '/encoder.t7', encoder:float(), 'binary', false)
-            torch.save(model_opts.save_dir .. '/adversary.t7', adversary:float(), 'binary', false)
-            torch.save(model_opts.save_dir .. '/adversaryGen.t7', adversaryGen:float(), 'binary', false)
+            torch.save(opts.save.enc, encoder:float())            
+            torch.save(opts.save.dec, decoder:float())
+            torch.save(opts.save.encD, adversary:float())
+            torch.save(opts.save.decD, adversaryGen:float())
             
-            torch.save(model_opts.save_dir .. '/rng.t7', torch.getRNGState(), 'binary', false)
-            torch.save(model_opts.save_dir .. '/rng_cuda.t7', cutorch.getRNGState(), 'binary', false)            
+            torch.save(opts.save.rng, torch.getRNGState())
+            torch.save(opts.save.rngCuda, cutorch.getRNGState())
             
             decoder:cuda()
             encoder:cuda()
