@@ -8,7 +8,9 @@ local DataProvider = {
     opts = nil
 }
 
-function DataProvider.create(imageDir, dataSavePath, opts)
+function DataProvider.create(imageDir, opts)
+    
+    dataSavePath = opts.save.data
     
     local data
     local labels
