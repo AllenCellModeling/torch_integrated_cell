@@ -1,11 +1,4 @@
--- require 'optim2'
-require 'optnet'
-
 local learner = {}
-
-
-
-    
 
 function optim_step(net, loss, optParam, optStates)
 -- this function assumes that all modules are nn.GPU-decorated
@@ -44,35 +37,21 @@ function optim_step(net, loss, optParam, optStates)
     end
 end
 
-function updateL1(net, deltaL1)
-    if net.modules ~= nil then
-        
-        for i, module in ipairs(net.modules) do
-            updateL1(module, deltaL1)
-        end
-    elseif torch.type(net):find('L1Penalty') then
-        newL1 = net.l1weight + deltaL1
-        if newL1 < 0 then
-            newL1 = 0
-        end
-        net.l1weight = newL1
-    end
-end
-
 function learner.loop(nIn)
     local x -- Minibatch
     local label
 
-    local advLoss = 0
-    local advGenLoss = 0
-    local minimaxLoss = 0
-    local reconLoss = 0
-    local latentLoss = 0
-    local reencodeLoss = 0
-    local minimaxDecLoss = 0
-    local minimaxDecLoss2 = 0
-    -- Create optimiser function evaluation
+    local xHatLoss = 0
+    local labelLoss = 0
+    local zHatLoss = 0
+    
+    local advEncLoss = 0
+    local advDecLoss = 0
+    
+    local minimaxEncLoss = 0
+    local minimaxDecLoss = 0    
 
+    -- Create optimiser function evaluation
     local dAdvDz = function(params)
         adversary:zeroGradParameters()
 
@@ -86,16 +65,16 @@ function learner.loop(nIn)
 
         codes = encoder:forward(x_in)
         local input = codes[#codes]
-         label = torch.zeros(opts.batchSize):typeAs(x_in) -- Labels for generated samples
+        label = torch.zeros(opts.batchSize):typeAs(x_in) -- Labels for generated samples
 
-         output = adversary:forward(input)
+        output = adversary:forward(input)
         local errEnc_fake = criterion_adv:forward(output, label)
         local df_do = criterion_adv:backward(output, label)
         adversary:backward(input, df_do)
 
-        advLoss = (errEnc_real + errEnc_fake)/2
+        advEncLoss = (errEnc_real + errEnc_fake)/2
 
-        return advLoss, gradParametersAdv
+        return advEncLoss, gradParametersAdv
     end
         
     local dAdvGenDx = function(params)   
@@ -139,9 +118,9 @@ function learner.loop(nIn)
         local df_do = criterion:backward(output, label)
         adversaryGen:backward(input, df_do)
 
-        advGenLoss = (errD_real + errD_fake)/2
+        advDecLoss = (errD_real + errD_fake)/2
 
-        return advGenLoss, gradParametersAdvGen
+        return advDecLoss, gradParametersAdvGen
     end
     
     local dAutoencoderDx = function(params)
@@ -149,11 +128,8 @@ function learner.loop(nIn)
         
         -- the encoder has already gone forward
         xHat = decoder:forward(codes)
-
-
-        
-        reconLoss = criterion_out:forward(xHat, x_out)
-        loss = reconLoss
+        xHatLoss = criterion_out:forward(xHat, x_out)
+        loss = xHatLoss
         local gradLoss = criterion_out:backward(xHat, x_out)
 
         -- Backwards pass
@@ -181,12 +157,12 @@ function learner.loop(nIn)
         end
 
         if opts.nOther > 0 then
-            local shapeHat = encoder_out[c]
-            shapeLoss = criterion_other:forward(shapeHat, code)
-            local shapeGradLoss = criterion_other:backward(shapeHat, code)
+            local zHat = encoder_out[c]
+            zHatLoss = criterion_other:forward(zHat, code)
+            local zHatGradLoss = criterion_other:backward(zHat, code)
 
             -- loss = loss + shapeLoss
-            gradLosses[c] = shapeGradLoss
+            gradLosses[c] = zHatGradLoss
 
             c = c+1
         end
@@ -194,74 +170,58 @@ function learner.loop(nIn)
         local yReal = torch.ones(opts.batchSize):typeAs(x_in)
         -- Train autoencoder (generator) to play a minimax game with the adversary (discriminator): min_G max_D log(1 - D(G(x)))
         local predFake = adversary:forward(encoder.output[c])
-        minimaxLoss = criterion_adv:forward(predFake, yReal)
+        minimaxEncLoss = criterion_adv:forward(predFake, yReal)
         local gradMinimaxLoss = criterion_adv:backward(predFake, yReal)
         local gradMinimax = adversary:updateGradInput(encoder.output[c], gradMinimaxLoss) -- Do not calculate gradient wrt adversary parameters
         gradLosses[c] = gradMinimax*opts.advLatentRatio
 
-        -- gradLosses[c] = nn.Clip(-1, 1):cuda():forward(gradLosses[c])
-        
         encoder:backward(x_in, gradLosses)
 
-        latentLoss = minimaxLoss + shapeLoss + labelLoss
+        latentLoss = minimaxEncLoss + zHatLoss + labelLoss
         
-        loss = reconLoss + latentLoss
+        loss = xHatLoss + latentLoss
     --     if fakeLoss < 0.79 and realLoss < 0.79 then -- -ln(0.45)
         cutorch.synchronizeAll()
-
         return loss, gradThetaEnc
     end
         
     local dDecdAdvGen = function(params)        
-       decoder:zeroGradParameters()
+        decoder:zeroGradParameters()
 
-       --[[ the three lines below were already executed in fDx, so save computation
-       noise:uniform(-1, 1) -- regenerate random noise
-       local fake = netG:forward(noise)
-       input:copy(fake) ]]--
         label = nil
         if opts.nClasses > 0 then
             label = classLabel
         else
             label = torch.ones(opts.batchSize):typeAs(x_in) 
         end
-        
-       local output = adversaryGen.output -- netD:forward(input) was already executed in fDx, so save computation
-       minimaxDecLoss = criterion:forward(output, label)
-       local df_do = criterion:backward(output, label)
-       local df_dg = adversaryGen:updateGradInput(input, df_do):clone()
+
+        local output = adversaryGen.output -- netD:forward(input) was already executed in fDx, so save computation
+        minimaxDecLoss = criterion:forward(output, label)
+        local df_do = criterion:backward(output, label)
+        local df_dg = adversaryGen:updateGradInput(input, df_do):clone()
 
         adversaryGen:clearState()
-        
-       decoder:backward(zFake, df_dg*opts.advGenRatio)
-       return minimaxDecLoss, gradParametersG
-        
+
+        decoder:backward(zFake, df_dg*opts.advGenRatio)
+        return minimaxDecLoss, gradParametersG
     end
     
     local dDecdAdvGen2 = function(params)        
-
-       --[[ the three lines below were already executed in fDx, so save computation
-       noise:uniform(-1, 1) -- regenerate random noise
-       local fake = netG:forward(noise)
-       input:copy(fake) ]]--
         if opts.nClasses > 0 then
             label = classLabel
         else
             label = torch.ones(opts.batchSize):typeAs(x_in) 
         end
-        
-        -- local xHat = decoder:forward(codes)
-        
-       local output = adversaryGen:forward(xHat) -- netD:forward(input) was already executed in fDx, so save computation
-       minimaxDecLoss2 = criterion:forward(output, label)
-       local df_do = criterion:backward(output, label)
-       df_dg = adversaryGen:updateGradInput(xHat, df_do)
 
-       decoder:backward(codes, df_dg*opts.advGenRatio)
-       return minimaxDecLoss, gradParametersG
-        
+        -- local xHat = decoder:forward(codes)
+        local output = adversaryGen:forward(xHat) -- netD:forward(input) was already executed in fDx, so save computation
+        minimaxDecLoss2 = criterion:forward(output, label)
+        local df_do = criterion:backward(output, label)
+        df_dg = adversaryGen:updateGradInput(xHat, df_do)
+
+        decoder:backward(codes, df_dg*opts.advGenRatio)
+        return minimaxDecLoss, gradParametersG
     end    
-    
     
     local ndat = nIn or dataProvider.train.inds:size()[1]
     -- main loop
@@ -274,15 +234,30 @@ function learner.loop(nIn)
         local indices = torch.randperm(ndat):long():split(opts.batchSize)
         indices[#indices] = nil
         local N = #indices * opts.batchSize
+        
+        -- variable to hold embeddings every loop
+        embeddings = {}
+        embeddings['train'] = torch.zeros(ndat, opts.nLatentDims)
+        
+        xHatLosses = {}
+        labelLosses = {}
+        zHatLosses = {}
+        advEncLosses = {}
+        advDecLosses = {}
+        minimaxEncLosses = {}
+        minimaxDecLosses = {}
+
+        local start = 1
 
         for t,v in ipairs(indices) do
             collectgarbage()
+            
+            local stop = start + v:size(1) - 1
 
             x_in, x_out = dataProvider:getImages(v, 'train')
             -- Forward pass
             x_in = x_in:cuda()
             x_out = x_out:cuda()
-            
             
             if opts.nOther > 0 then
                 classLabelOneHot = dataProvider:getLabels(v, 'train'):cuda()
@@ -291,47 +266,48 @@ function learner.loop(nIn)
                 
                 classLabelOneHot = torch.log(classLabelOneHot)
                 classLabelOneHot:maskedFill(classLabelOneHot:eq(-math.huge), -25)
-
             end
 
             if opts.nClasses > 0 then
                 code = dataProvider:getCodes(v, 'train')
             end
 
-
             -- update the decoder's advarsary            
             if opts.useGanD then
                 dAdvGenDx()            
-                optim_step(adversaryGen, advGenLoss, optAdvGen, stateAdvGen)
+                optim_step(adversaryGen, advDecLoss, optAdvGen, stateAdvGen)
             end
             
             -- update the encoder's advarsary
             dAdvDz()
-            optim_step(adversary, advLoss, optAdv, stateAdv)
+            optim_step(adversary, advEncLoss, optAdv, stateAdv)
             adversary:clearState()
+            
             
             if opts.useGanD then
                 dDecdAdvGen()
             end
             dAutoencoderDx()
 
-            
             if opts.useGanD then
                 dDecdAdvGen2()
             end
             
+            minimaxDecLoss = minimaxDecLoss+minimaxDecLoss2;
+            
             optim_step(encoder, loss, optEnc, stateEnc)
-            optim_step(decoder, reconLoss+minimaxDecLoss+minimaxDecLoss2, optDec, stateDec)
+            optim_step(decoder, xHatLoss+minimaxDecLoss, optDec, stateDec)
             
-            losses[#losses + 1] = reconLoss
-            latentlosses[#latentlosses+1] = latentLoss
-            reencodelosses[#reencodelosses+1] = reencodeLoss
-            advlosses[#advlosses + 1] = advLoss    
-            advGenLosses[#advGenLosses + 1] = advGenLoss
+            xHatLosses[#xHatLosses+1] = xHatLoss
+            labelLosses[#labelLosses+1] = labelLoss
+            zHatLosses[#zHatLosses+1] = zHatLoss
+            advEncLosses[#advEncLosses+1] = advEncLoss
+            advDecLosses[#advDecLosses+1] = advDecLoss
+            minimaxEncLosses[#minimaxEncLosses+1] = minimaxEncLoss
+            minimaxDecLosses[#minimaxDecLosses+1] = minimaxDecLoss
+
+            embeddings['train']:sub(start, stop, 1,opts.nLatentDims):copy(codes[#codes])
             
-            advMinimaxLoss[#advMinimaxLoss + 1] = minimaxLoss
-            advGenMinimaxLoss[#advGenMinimaxLoss + 1] = minimaxDecLoss+minimaxDecLoss2
-             
             encoder:clearState()
             decoder:clearState()
             adversaryGen:clearState()
@@ -340,130 +316,177 @@ function learner.loop(nIn)
         collectgarbage()
 
         x_in, x_out = nil, nil
+        
+        m_xHat =     torch.mean(torch.Tensor(xHatLosses))
+        m_label =    torch.mean(torch.Tensor(labelLosses))
+        m_zHat =     torch.mean(torch.Tensor(zHatLosses))
+        m_advEnc =   torch.mean(torch.Tensor(advEncLosses))
+        m_advDec =   torch.mean(torch.Tensor(advDecLosses))
+        m_mmEnc =    torch.mean(torch.Tensor(minimaxEncLosses))
+        m_mmDec =    torch.mean(torch.Tensor(minimaxDecLosses))
+        
+        loggerTrain:add{epoch, m_xHat, m_label, m_zHat, m_advEnc, m_advDec, m_mmEnc, m_mmDec, torch.toc(tic)}
 
-        recon_loss =          torch.mean(torch.Tensor(losses)[{{-#indices,-1}}]);
-        latent_loss =         torch.mean(torch.Tensor(latentlosses)[{{#indices, -1}}])
-        reencode_loss =       torch.mean(torch.Tensor(reencodelosses)[{{#indices, -1}}])
+        -- print('Epoch ' .. opts.epoch .. '/' .. opts.nepochs .. ' xHat loss: ' .. m_xHat .. ' Label loss: ' .. m_label .. ' zHat loss: ' .. m_zHat .. ' advEnc: ' .. m_advEnc .. ' advDec: ' .. m_advDec .. ' time: ' .. torch.toc(tic))
 
-        adv_loss =            torch.mean(torch.Tensor(advlosses)[{{-#indices,-1}}]);
-        advGen_loss =         torch.mean(torch.Tensor(advGenLosses)[{{-#indices,-1}}]);
-        minimax_latent_loss = torch.mean(torch.Tensor(advMinimaxLoss)[{{-#indices,-1}}]);
-        minimax_gen_loss =    torch.mean(torch.Tensor(advGenMinimaxLoss)[{{-#indices,-1}}]);
-
-        print('Epoch ' .. opts.epoch .. '/' .. opts.nepochs .. ' Recon loss: ' .. recon_loss .. ' Adv loss: ' .. adv_loss .. ' AdvGen loss: ' .. advGen_loss .. ' time: ' .. torch.toc(tic))
-        print(minimax_latent_loss)
-        print(minimax_gen_loss)
-
-        if recon_loss == math.huge or recon_loss ~= recon_loss or latent_loss == math.huge or latent_loss ~= latent_loss then
+        if m_xHat == math.huge or m_xHat ~= m_xHat or advEncLoss == math.huge or advEncLoss ~= advEncLoss then
             print('Exiting')
             break
         end
+        
+--         trainLogger:add{epoch, m_xHat, m_label, m_zHat, m_advEnc, m_advDec, m_mmEnc, m_mmDec}
 
-      -- Plot training curve(s)
-        local plots = {{'Reconstruction', torch.linspace(1, #losses, #losses), torch.Tensor(losses), '-'}}
-        plots[#plots + 1] = {'Latent', torch.linspace(1, #latentlosses, #latentlosses), torch.Tensor(latentlosses), '-'}
-        plots[#plots + 1] = {'Adversary', torch.linspace(1, #advlosses, #advlosses), torch.Tensor(advlosses), '-'}
-        plots[#plots + 1] = {'AdversaryGen', torch.linspace(1, #advGenLosses, #advGenLosses), torch.Tensor(advGenLosses), '-'}
-        plots[#plots + 1] = {'MinimaxAdvLatent', torch.linspace(1, #advMinimaxLoss, #advMinimaxLoss), torch.Tensor(advMinimaxLoss), '-'}
-        plots[#plots + 1] = {'MinimaxAdvGen', torch.linspace(1, #advGenMinimaxLoss, #advGenMinimaxLoss), torch.Tensor(advGenMinimaxLoss), '-'}
-        plots[#plots + 1] = {'Reencode', torch.linspace(1, #reencodelosses, #reencodelosses), torch.Tensor(reencodelosses), '-'}
+--         -- Plot training curve(s)
+--         spacing = torch.linspace(1, #xHatLosses, #xHatLosses)
+--         local plots = {{'xHatLoss',            spacing, t_xHat, '-'}}
+--         plots[#plots + 1] = {'labelLoss',      spacing, t_label, '-'}
+--         plots[#plots + 1] = {'zHatLoss',       spacing, t_zHat, '-'}
+--         plots[#plots + 1] = {'advEncLoss',     spacing, t_advEnc, '-'}
+--         plots[#plots + 1] = {'advDecLoss',     spacing, t_advDec, '-'}
+--         plots[#plots + 1] = {'minimaxEncLoss', spacing, t_mmEnc, '-'}
+--         plots[#plots + 1] = {'minimaxDecLoss', spacing, t_mmDec, '-'}
 
         if opts.epoch % opts.saveProgressIter == 0 then
-            
-            encoder:evaluate()
-            decoder:evaluate()
-            rotate_tmp = opts.rotate
-            dataProvider.opts.rotate = false
-
-            local x_in, x_out = dataProvider:getImages(torch.linspace(1,10,10):long(), 'train')
-            recon_train = evalIm(x_in,x_out)
-    
-            local x_in, x_out = dataProvider:getImages(torch.linspace(1,10,10):long(), 'test')
-            recon_test = evalIm(x_in,x_out)
-            
-            local reconstructions = torch.cat(recon_train, recon_test,2)
-
-            image.save(opts.saveDir .. '/progress.png', reconstructions)
-
-            embeddings = {}
-            traintest = {'train', 'test'}
-            
-            for i = 1,#traintest do
-                train_or_test = traintest[i]
-            
-                local ndat = dataProvider[train_or_test].inds:size()[1]
-
-                embeddings[train_or_test] = torch.zeros(ndat, opts.nLatentDims)
-                local indices = torch.linspace(1,ndat,ndat):long():split(opts.batchSize)
-
-                local start = 1
-                for t,v in ipairs(indices) do
-                    collectgarbage()
-                    local stop = start + v:size(1) - 1
-
-                    local x_in = dataProvider:getImages(v, train_or_test)
-                    local x_in = x_in:cuda()
-
-                    local codes = encoder:forward(x_in)
-                    embeddings[train_or_test]:sub(start, stop, 1,opts.nLatentDims):copy(codes[#codes])
-
-                    start = stop + 1
-                end
-            end
-            
-            dataProvider.opts.rotate = rotate_tmp
-
-            encoder:training()
-            decoder:training()          
-
-            torch.save(opts.save.tmpEmbeddings, embeddings)
-            embeddings = nil
-            
-            torch.save(opts.save.tmpPlots, plots)
-            torch.save(opts.save.tmpEpoch, opts.epoch)
+            plotStuff()
         end
             
         if opts.epoch % opts.saveStateIter == 0 then
-            print('Saving model.')
-            
-            -- save the optimizer states
-            torch.save(opts.save.stateEnc, utils.table2float(stateEnc))
-            torch.save(opts.save.stateDec, utils.table2float(stateDec))            
-            torch.save(opts.save.stateEncD, utils.table2float(stateAdv))
-            torch.save(opts.save.stateDecD, utils.table2float(stateAdvGen))
-            
-            -- save the options
-            torch.save(opts.save.opts, opts)
-            torch.save(opts.save.optEnc, optEnc)
-            torch.save(opts.save.optDec, optDec)
-            torch.save(opts.save.optEncD, optAdv)
-            torch.save(opts.save.optDecD, optAdvGen)  
-            
-            decoder:clearState()
-            encoder:clearState()
-            adversary:clearState()
-            adversaryGen:clearState()            
-            
-            torch.save(opts.save.plots, plots)
-            torch.save(opts.save.epoch, opts.epoch)
-            
-            torch.save(opts.save.enc, encoder:float())            
-            torch.save(opts.save.dec, decoder:float())
-            torch.save(opts.save.encD, adversary:float())
-            torch.save(opts.save.decD, adversaryGen:float())
-            
-            torch.save(opts.save.rng, torch.getRNGState())
-            torch.save(opts.save.rngCuda, cutorch.getRNGState())
-            
-            decoder:cuda()
-            encoder:cuda()
-            adversary:cuda()
-            adversaryGen:cuda()
-            
+            saveStuff()
         end
         
         plots = nil
     end
+end
+
+function plotStuff()
+    encoder:evaluate()
+    decoder:evaluate()
+    rotate_tmp = opts.rotate
+    dataProvider.opts.rotate = false
+
+    local x_in, x_out = dataProvider:getImages(torch.linspace(1,10,10):long(), 'train')
+    recon_train = evalIm(x_in,x_out, opts)
+
+    local x_in, x_out = dataProvider:getImages(torch.linspace(1,10,10):long(), 'test')
+    recon_test = evalIm(x_in,x_out, opts)
+
+    local reconstructions = torch.cat(recon_train, recon_test,2)
+    image.save(opts.saveDir .. '/progress.png', reconstructions)
+
+    -- traintest = {'test'}
+    -- for i = 1,#traintest do
+        -- train_or_test = traintest[i]
+    train_or_test = 'test'
+
+    local ndat = dataProvider[train_or_test].inds:size()[1]
+
+    embeddings[train_or_test] = torch.zeros(ndat, opts.nLatentDims)
+    local indices = torch.linspace(1,ndat,ndat):long():split(opts.batchSize)
+    -- print('indices: ' .. #indices)
+    
+    labelLoss = torch.zeros(#indices)
+    zHatLoss = torch.zeros(#indices)
+    xHatLoss = torch.zeros(#indices)
+    
+    
+    local start = 1
+    local c = 1
+    for t,v in ipairs(indices) do
+        collectgarbage()
+        local stop = start + v:size(1) - 1
+
+        local x_in, x_out = dataProvider:getImages(v, train_or_test)
+        local x_in = x_in:cuda()
+        local x_out = x_out:cuda()
+
+        local encoder_out = encoder:forward(x_in)
+        local xHat = decoder:forward(encoder_out)
+        iter = 1;
+        
+        if opts.nClasses > 0 then
+            local classLabelOneHot = dataProvider:getLabels(v, 'train'):cuda()
+            local __, classLabel = torch.max(classLabelOneHot, 2)
+            classLabel = torch.squeeze(classLabel:typeAs(x_in))
+
+            local labelHat = encoder_out[iter]
+            labelLoss[c] = criterion_label:forward(labelHat, classLabel)
+
+            iter = iter+1
+        end
+
+        if opts.nOther > 0 then
+            local code = dataProvider:getCodes(v, train_or_test)
+            local zHat = encoder_out[iter]
+            zHatLoss[c] = criterion_other:forward(zHat, code)
+
+            iter = iter+1
+        end
+
+        -- print(#indices)
+        -- print(criterion_out:forward(xHat, x_out))
+        -- print(xHatLoss)
+        xHatLoss[c] = criterion_out:forward(xHat, x_out)
+
+        embeddings[train_or_test]:sub(start, stop, 1,opts.nLatentDims):copy(encoder_out[iter])
+
+        start = stop + 1
+        c = c+1
+    end
+
+    loggerTest:add{epoch, torch.mean(xHatLoss), torch.mean(labelLoss), torch.mean(zHatLoss)}
+    -- end
+
+    dataProvider.opts.rotate = rotate_tmp
+
+    encoder:training()
+    decoder:training()          
+
+    torch.save(opts.save.tmpLoggerTest, loggerTest)
+    torch.save(opts.save.tmpLoggerTest, loggerTrain)
+    torch.save(opts.save.tmpEpoch, opts.epoch)
+    
+    torch.save(opts.save.tmpEmbeddings, embeddings)
+    embeddings = nil
+end
+
+function saveStuff()
+    print('Saving model.')
+
+    -- save the optimizer states
+    torch.save(opts.save.stateEnc, utils.table2float(stateEnc))
+    torch.save(opts.save.stateDec, utils.table2float(stateDec))            
+    torch.save(opts.save.stateEncD, utils.table2float(stateAdv))
+    torch.save(opts.save.stateDecD, utils.table2float(stateAdvGen))
+
+    -- save the options
+    torch.save(opts.save.opts, opts)
+    torch.save(opts.save.optEnc, optEnc)
+    torch.save(opts.save.optDec, optDec)
+    torch.save(opts.save.optEncD, optAdv)
+    torch.save(opts.save.optDecD, optAdvGen)  
+
+    decoder:clearState()
+    encoder:clearState()
+    adversary:clearState()
+    adversaryGen:clearState()            
+
+    -- torch.save(opts.save.plots, plots)
+    torch.save(opts.save.loggerTest, loggerTest)
+    torch.save(opts.save.loggerTrain, loggerTrain)    
+    torch.save(opts.save.epoch, opts.epoch)
+
+    torch.save(opts.save.enc, encoder:float())            
+    torch.save(opts.save.dec, decoder:float())
+    torch.save(opts.save.encD, adversary:float())
+    torch.save(opts.save.decD, adversaryGen:float())
+
+    torch.save(opts.save.rng, torch.getRNGState())
+    torch.save(opts.save.rngCuda, cutorch.getRNGState())
+
+    decoder:cuda()
+    encoder:cuda()
+    adversary:cuda()
+    adversaryGen:cuda()
 end
 
 return learner
