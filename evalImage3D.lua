@@ -1,8 +1,8 @@
-evalIm = function(x_in, x_out)
+evalIm = function(x_in, x_out, opts)
     local codes = encoder:forward(x_in:cuda())
     local xHat = decoder:forward(codes)
 
-    local myFile = hdf5.open(opts.save_dir .. '/progress.h5', 'w')
+    local myFile = hdf5.open(opts.saveDir .. '/progress.h5', 'w')
     myFile:write('/x_out', x_out:float())
     myFile:write('/xHat', xHat:float())
     myFile:close()
