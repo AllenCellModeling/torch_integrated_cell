@@ -1,4 +1,4 @@
-evalIm = function(x_in, x_out)
+evalIm = function(x_in, x_out, opts)
     local xHat, latentHat, latentHat_var = decoder:forward(encoder:forward(x_in:cuda()))
         
     xHat = imtools.mat2img(xHat)
