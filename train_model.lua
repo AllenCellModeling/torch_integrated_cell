@@ -55,13 +55,17 @@ cmd:option('-imsize',             256, 'desired size of images in dataset')
 cmd:option('-dataDir', './data/','data save dir (not used in 3D)')
 cmd:option('-dataProvider',      'DataProvider2D', 'data provider object')
 cmd:option('-evalImageFunc',        'evalImage2D', 'image evaluation function')
+cmd:option('-imCh1_1',        '1', 'image evaluation function')
+cmd:option('-imCh1_2',        '3', 'image evaluation function')
+
+
 
 -- training settings
 cmd:option('-optimizer',         'adam', 'optimization method')
 cmd:option('-learnrate',         0.0002, 'learning rate')
 cmd:option('-advGenRatio',       1E-4, 'ratio for advGen update')
 cmd:option('-advLatentRatio',    1E-4, 'ratio for advLatent update')
-cmd:option('-ganNoise',          0.01, 'injection noise for the GAN')
+cmd:option('-ganNoise',          0, 'injection noise for the GAN')
 cmd:option('-ganNoiseAllLayers', false, 'add noise on all GAN layers')
 cmd:option('-nepochs',           150, 'number of epochs')
 cmd:option('-nepochspt2',        300, 'number of epochs for pt2')
@@ -105,8 +109,8 @@ print('Setting up')
 opts = setup.init(opts)
 print(opts)
 
-opts.channel_inds_in = torch.LongTensor{1,3}
-opts.channel_inds_out = torch.LongTensor{1,3}
+opts.channel_inds_in = torch.LongTensor{opts.imCh1_1, opts.imCh1_2}
+opts.channel_inds_out = torch.LongTensor{opts.imCh1_1, opts.imCh1_2}
 opts.nChOut = opts.channel_inds_in:size(1)
 opts.nChIn = opts.channel_inds_out:size(1)
 
