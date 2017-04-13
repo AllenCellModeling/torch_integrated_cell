@@ -84,21 +84,21 @@ function setup.init(opts)
     loggerTest = optim.Logger()
     loggerTest = loggerTrain:setNames{'epoch', 'xHat loss', 'label loss', 'zHat loss'}
     
-     if paths.filep(opts.save.opts) then
+     if paths.filep(opts.save.enc) then
         print('Loading previous optimizer state')
 
-        opts = torch.load(opts.save.opts)
+        -- opts = torch.load(opts.save.opts)
 
         optEnc = torch.load(opts.save.optEnc)
         optDec = torch.load(opts.save.optDec)
         optAdv = torch.load(opts.save.optEncD)
-        optAdvGen = torch.load(opts.save.optDecD)        
+        optAdvGen = torch.load(opts.save.optDecD)  
+        
+        opts.epoch = torch.load(opts.save.epoch)
 
         stateEnc = utils.table2cuda(torch.load(opts.save.stateEnc))
         stateDec = utils.table2cuda(torch.load(opts.save.stateDec))    
         stateAdv = utils.table2cuda(torch.load(opts.save.stateEncD))
-        
-        -- plots = torch.load(opts.save.plots)
         
         loggerTest = torch.load(opts.save.loggerTest)
         loggerTest.file = io.stdout
@@ -130,20 +130,20 @@ function setup.getModel(opts)
     if paths.filep(opts.save.dec) then
         print('Loading model from ' .. opts.saveDir)
         
-        print('Loading encoder')
+        print('Loading enc')
         encoder = torch.load(opts.save.enc)
         encoder:float()
         encoder:clearState()
         collectgarbage()
         
-        print('Loading adversary')
+        print('Loading encD')
         adversary = torch.load(opts.save.encD)
         adversary:float()
         adversary:clearState()
         collectgarbage()
         
         if paths.filep(opts.save.decD) then
-            print('Loading adversaryGen')
+            print('Loading decD')
             adversaryGen = torch.load(opts.save.decD)
             adversaryGen:float()
             adversaryGen:clearState()
@@ -152,7 +152,7 @@ function setup.getModel(opts)
             adversaryGen = nil
         end
         
-        print('Loading decoder')
+        print('Loading dec')
         decoder = torch.load(opts.save.dec)    
         decoder:float()
         decoder:clearState()

@@ -308,6 +308,8 @@ function learner.loop(nIn)
 
             embeddings['train']:sub(start, stop, 1,opts.nLatentDims):copy(codes[#codes])
             
+            loggerTrain:add{opts.epoch, xHatLoss, labelLoss, zHatLoss, advEncLoss, advDecLoss, minimaxEncLoss, minimaxDecLoss, torch.toc(tic)}
+            
             encoder:clearState()
             decoder:clearState()
             adversaryGen:clearState()
@@ -325,7 +327,7 @@ function learner.loop(nIn)
         m_mmEnc =    torch.mean(torch.Tensor(minimaxEncLosses))
         m_mmDec =    torch.mean(torch.Tensor(minimaxDecLosses))
         
-        loggerTrain:add{epoch, m_xHat, m_label, m_zHat, m_advEnc, m_advDec, m_mmEnc, m_mmDec, torch.toc(tic)}
+        loggerTrain:add{opts.epoch, m_xHat, m_label, m_zHat, m_advEnc, m_advDec, m_mmEnc, m_mmDec, torch.toc(tic)}
 
         -- print('Epoch ' .. opts.epoch .. '/' .. opts.nepochs .. ' xHat loss: ' .. m_xHat .. ' Label loss: ' .. m_label .. ' zHat loss: ' .. m_zHat .. ' advEnc: ' .. m_advEnc .. ' advDec: ' .. m_advDec .. ' time: ' .. torch.toc(tic))
 
@@ -433,7 +435,7 @@ function plotStuff()
         c = c+1
     end
 
-    loggerTest:add{epoch, torch.mean(xHatLoss), torch.mean(labelLoss), torch.mean(zHatLoss)}
+    loggerTest:add{opts.epoch, torch.mean(xHatLoss), torch.mean(labelLoss), torch.mean(zHatLoss)}
     -- end
 
     dataProvider.opts.rotate = rotate_tmp
@@ -442,7 +444,7 @@ function plotStuff()
     decoder:training()          
 
     torch.save(opts.save.tmpLoggerTest, loggerTest)
-    torch.save(opts.save.tmpLoggerTest, loggerTrain)
+    torch.save(opts.save.tmpLoggerTrain, loggerTrain)
     torch.save(opts.save.tmpEpoch, opts.epoch)
     
     torch.save(opts.save.tmpEmbeddings, embeddings)
