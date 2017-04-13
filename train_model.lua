@@ -52,7 +52,7 @@ cmd:option('-gpu',               -1, 'gpu for the everything(overrides other gpu
 -- data settings
 cmd:option('-imdir',             '/root/images/release_4_1_17/release_v2/aligned/2D', 'parent directory for images')
 cmd:option('-imsize',             256, 'desired size of images in dataset')
-cmd:option('-dataDir', './data/','data save dir')
+cmd:option('-dataDir', './data/','data save dir (not used in 3D)')
 cmd:option('-dataProvider',      'DataProvider2D', 'data provider object')
 cmd:option('-evalImageFunc',        'evalImage2D', 'image evaluation function')
 
@@ -105,25 +105,12 @@ print('Setting up')
 opts = setup.init(opts)
 print(opts)
 
-evalIm = function(x_in, x_out)
-    local xHat, latentHat, latentHat_var = decoder:forward(encoder:forward(x_in:cuda()))
-        
-    xHat = imtools.mat2img(xHat)
-    x_out = imtools.mat2img(x_out)
-        
-    -- Plot reconstructions
-    recon = torch.cat(image.toDisplayTensor(x_out, 1, x_in:size(1)), image.toDisplayTensor(xHat, 1, x_in:size(1)), 2)
-
-    return recon
-end
-
-
 opts.channel_inds_in = torch.LongTensor{1,3}
 opts.channel_inds_out = torch.LongTensor{1,3}
 opts.nChOut = opts.channel_inds_in:size(1)
 opts.nChIn = opts.channel_inds_out:size(1)
 
-dataProvider = DataProvider.create(opts.imdir, opts.save.data, opts)
+dataProvider = DataProvider.create(opts.imdir, opts)
 x = dataProvider:getImages(torch.LongTensor{1}, 'train')
 print(x:size())
 
@@ -176,7 +163,7 @@ opts.nOther = opts.nLatentDims
 criterion = criterion_label
 opts.nepochs = opts.nepochspt2
 
-dataProvider = DataProvider.create(opts.imdir, opts.save.data, opts)
+dataProvider = DataProvider.create(opts.imdir, opts)
 function dataProvider:getCodes(indices, train_or_test)
     local codes = shape_embeddings[train_or_test]:index(1, indices):cuda()
     return codes
