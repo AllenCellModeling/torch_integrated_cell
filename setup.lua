@@ -1,38 +1,6 @@
-setup = {}
+require 'optim'
 
-
--- function setup.getModelOpts()
-
---     local model_opts = {}
---     opts.cuda = cuda
-    
---     opts.parent_dir = 'AAE_shape_learner_v2'
---     opts.modelName = 'cell_learner_3_caae_learner'
---     opts.saveDir = opts.parent_dir .. '/' .. opts.modelName
---     opts.image_dir = '/root/images/2016_11_08_Nuc_Cell_Seg_8_cell_lines_V22/processed_aligned/2D'
---     opts.image_sub_size = 16.96875/2
-
---     opts.nLatentDims = 16
---     opts.channel_inds_in = torch.LongTensor{1,3}
---     opts.channel_inds_out = torch.LongTensor{1,3}
-
---     opts.rotate = true
---     opts.nChIn = opts.channel_inds_in:size(1)
---     opts.nChOut = opts.channel_inds_out:size(1)
---     opts.nClasses = 0
---     opts.nOther = 0
---     opts.dropoutRate = 0.2
---     opts.fullConv = true
-    
---     opts.adversarialGen = false
-    
---     opts.test_model = false
---     opts.verbose = true
-
---     paths.mkdir(opts.parent_dir)
-
---     return model_opts
--- end
+setup = {} 
 
 function setup.init(opts)
     
@@ -65,6 +33,12 @@ function setup.init(opts)
     opts.save.epoch = opts.saveDir .. '/epoch.t7'
     
     opts.save.data = opts.dataDir .. '/data_' .. opts.imsize .. '.t7'
+    
+    opts.save.loggerTrain = opts.saveDir .. '/logger_train.t7'
+    opts.save.tmpLoggerTrain = opts.saveDir .. '/tmp_logger_train.t7'
+    
+    opts.save.loggerTest = opts.saveDir .. '/logger_test.t7'
+    opts.save.tmpLoggerTest = opts.saveDir .. '/tmp_logger_test.t7'
     
     
     if opts.skipGanD then
@@ -102,10 +76,13 @@ function setup.init(opts)
     stateAdv = {}
     stateAdvGen = {}
 
-    losses, latentlosses, advlosses, advGenLosses, advMinimaxLoss, advGenMinimaxLoss, advlossesGen, reencodelosses = {}, {}, {}, {}, {}, {}, {}, {}, {}
-    
     paths.mkdir(opts.dataDir)
     
+    loggerTrain = optim.Logger()
+    loggerTrain = loggerTrain:setNames{'epoch', 'xHat loss', 'label loss', 'zHat loss', 'advEnc loss', 'advDec loss', 'minimaxEnc loss', 'minimaxDec loss', 'time'}
+    
+    loggerTest = optim.Logger()
+    loggerTest = loggerTrain:setNames{'epoch', 'xHat loss', 'label loss', 'zHat loss'}
     
      if paths.filep(opts.save.opts) then
         print('Loading previous optimizer state')
@@ -117,41 +94,25 @@ function setup.init(opts)
         optAdv = torch.load(opts.save.optEncD)
         optAdvGen = torch.load(opts.save.optDecD)        
 
-        
         stateEnc = utils.table2cuda(torch.load(opts.save.stateEnc))
         stateDec = utils.table2cuda(torch.load(opts.save.stateDec))    
         stateAdv = utils.table2cuda(torch.load(opts.save.stateEncD))
         
+        -- plots = torch.load(opts.save.plots)
         
-        plots = torch.load(opts.save.plots)
+        loggerTest = torch.load(opts.save.loggerTest)
+        loggerTest.file = io.stdout
+        
+        loggerTrain = torch.load(opts.save.loggerTrain)
+        loggerTrain.file = io.stdout
         
         if paths.filep(opts.save.stateDecD) then
             stateAdvGen = utils.table2cuda(torch.load(opts.save.stateDecD))
-            
-            losses =            plots[1][3]:totable()
-            latentlosses =      plots[2][3]:totable()
-            advlosses =         plots[3][3]:totable()
-            advGenLosses =      plots[4][3]:totable()
-            advMinimaxLoss =    plots[5][3]:totable()
-            advGenMinimaxLoss = plots[6][3]:totable()
-            reencodelosses =    plots[7][3]:totable()
-            
-        else
-            print('Could not find stateAdvGen_path: ' .. opts.save.stateDecD)
-            stateAdvGen = {}
-            
-            losses = plots[1][3]:totable()
-            latentlosses = plots[2][3]:totable()
-            advlosses = plots[3][3]:totable()
-            advMinimaxLoss = plots[4][3]:totable()
-            reencodelosses = plots[5][3]:totable()
-            
-
         end
     end
 
-    plots = {}
-    loss, advloss, advlossGen = {}, {}, {}
+    -- plots = {}
+    -- loss, advloss, advlossGen = {}, {}, {}
     
     return opts
 end
@@ -379,4 +340,5 @@ end
 
 
 return setup
+
 
