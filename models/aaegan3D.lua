@@ -23,6 +23,9 @@ end
 
 
 function Model:create(opts)
+    self.ganNoise = opts.ganNoise or 0
+    self.ganNoiseAllLayers = opts.ganNoiseAllLayers or false
+    
     self.nLatentDims = opts.nLatentDims
     self.nClasses = opts.nClasses
     self.nChIn = opts.nChIn
@@ -130,7 +133,8 @@ function Model:createAutoencoder()
     self.decoder:add(nn.PReLU())
     
     self.decoder:add(nn.VolumetricFullConvolution(64, self.nChOut, kT-1, kW-1, kH-1, dT, dW, dH, padT-1, padW-1, padH-1))
-    self.decoder:add(nn.VolumetricBatchNormalization(self.nChOut))
+    -- this being commented out is necessary for reasonable convergence (???)
+    -- self.decoder:add(nn.VolumetricBatchNormalization(self.nChOut))
     self.decoder:add(nn.Sigmoid(true))
 
     self.encoder:apply(weights_init)
@@ -166,7 +170,7 @@ function Model:createAdversary()
 end
 
 function Model:createGenAdversary()
-
+    noise = self.ganNoise
     ndf = 64
     
     kT, kW, kH = 5, 5, 5
@@ -175,6 +179,10 @@ function Model:createGenAdversary()
     
     self.adversaryGen = nn.Sequential()
 
+    if noise > 0 then
+        self.adversaryGen:add(nn.WhiteNoise(0, noise))
+    end
+    
     self.adversaryGen:add(nn.VolumetricConvolution(self.nChOut, ndf, kT, kW, kH, dT, dW, dH, padT, padW, padH))
     self.adversaryGen:add(nn.VolumetricBatchNormalization(ndf))  
     self.adversaryGen:add(nn.LeakyReLU(0.2, true))
