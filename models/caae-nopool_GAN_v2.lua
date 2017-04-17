@@ -216,8 +216,8 @@ function Model:createAdversaryGen()
     self.adversaryGen:add(nn.LeakyReLU(0.2, true))
     
     -- state size: (ndf*8) x 4 x 4
-    if noise > 0 then
-        self.adversaryGen:add(nn.WhiteNoise(0, noise))
+   if noise > 0 then
+       self.adversaryGen:add(nn.WhiteNoise(0, noise))
     end
 
     if self.nClasses > 0 then
