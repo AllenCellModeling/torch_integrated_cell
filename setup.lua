@@ -47,7 +47,6 @@ function setup.init(opts)
         opts.useGanD = true
     end
     opts.image_sub_size = 1.4707*(512/opts.imsize)
-    
         
     opts.epoch = 0
 
@@ -82,7 +81,7 @@ function setup.init(opts)
     loggerTrain = loggerTrain:setNames{'epoch', 'xHat loss', 'label loss', 'zHat loss', 'advEnc loss', 'advDec loss', 'minimaxEnc loss', 'minimaxDec loss', 'time'}
     
     loggerTest = optim.Logger()
-    loggerTest = loggerTrain:setNames{'epoch', 'xHat loss', 'label loss', 'zHat loss'}
+    loggerTest = loggerTest:setNames{'epoch', 'xHat loss', 'label loss', 'zHat loss'}
     
      if paths.filep(opts.save.enc) then
         print('Loading previous optimizer state')

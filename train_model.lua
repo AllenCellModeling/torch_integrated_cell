@@ -58,8 +58,6 @@ cmd:option('-evalImageFunc',        'evalImage2D', 'image evaluation function')
 cmd:option('-imCh1_1',        '1', 'image evaluation function')
 cmd:option('-imCh1_2',        '3', 'image evaluation function')
 
-
-
 -- training settings
 cmd:option('-optimizer',         'adam', 'optimization method')
 cmd:option('-learnrate',         0.0002, 'learning rate')

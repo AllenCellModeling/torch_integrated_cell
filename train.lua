@@ -306,7 +306,7 @@ function learner.loop(nIn)
             minimaxEncLosses[#minimaxEncLosses+1] = minimaxEncLoss
             minimaxDecLosses[#minimaxDecLosses+1] = minimaxDecLoss
 
-            embeddings['train']:sub(start, stop, 1,opts.nLatentDims):copy(codes[#codes])
+            embeddings['train']:indexCopy(1, v, torch.Tensor(codes[#codes]:size()):copy(codes[#codes]))
             
             loggerTrain:add{opts.epoch, xHatLoss, labelLoss, zHatLoss, advEncLoss, advDecLoss, minimaxEncLoss, minimaxDecLoss, torch.toc(tic)}
             
@@ -327,26 +327,10 @@ function learner.loop(nIn)
         m_mmEnc =    torch.mean(torch.Tensor(minimaxEncLosses))
         m_mmDec =    torch.mean(torch.Tensor(minimaxDecLosses))
         
-        loggerTrain:add{opts.epoch, m_xHat, m_label, m_zHat, m_advEnc, m_advDec, m_mmEnc, m_mmDec, torch.toc(tic)}
-
-        -- print('Epoch ' .. opts.epoch .. '/' .. opts.nepochs .. ' xHat loss: ' .. m_xHat .. ' Label loss: ' .. m_label .. ' zHat loss: ' .. m_zHat .. ' advEnc: ' .. m_advEnc .. ' advDec: ' .. m_advDec .. ' time: ' .. torch.toc(tic))
-
         if m_xHat == math.huge or m_xHat ~= m_xHat or advEncLoss == math.huge or advEncLoss ~= advEncLoss then
             print('Exiting')
             break
         end
-        
---         trainLogger:add{epoch, m_xHat, m_label, m_zHat, m_advEnc, m_advDec, m_mmEnc, m_mmDec}
-
---         -- Plot training curve(s)
---         spacing = torch.linspace(1, #xHatLosses, #xHatLosses)
---         local plots = {{'xHatLoss',            spacing, t_xHat, '-'}}
---         plots[#plots + 1] = {'labelLoss',      spacing, t_label, '-'}
---         plots[#plots + 1] = {'zHatLoss',       spacing, t_zHat, '-'}
---         plots[#plots + 1] = {'advEncLoss',     spacing, t_advEnc, '-'}
---         plots[#plots + 1] = {'advDecLoss',     spacing, t_advDec, '-'}
---         plots[#plots + 1] = {'minimaxEncLoss', spacing, t_mmEnc, '-'}
---         plots[#plots + 1] = {'minimaxDecLoss', spacing, t_mmDec, '-'}
 
         if opts.epoch % opts.saveProgressIter == 0 then
             plotStuff()
@@ -373,7 +357,7 @@ function plotStuff()
     recon_test = evalIm(x_in,x_out, opts)
 
     local reconstructions = torch.cat(recon_train, recon_test,2)
-    image.save(opts.saveDir .. '/progress.png', reconstructions)
+    image.save(opts.saveDir .. '/progress_' .. opts.epoch .. '.png', reconstructions)
 
     -- traintest = {'test'}
     -- for i = 1,#traintest do
@@ -424,19 +408,15 @@ function plotStuff()
             iter = iter+1
         end
 
-        -- print(#indices)
-        -- print(criterion_out:forward(xHat, x_out))
-        -- print(xHatLoss)
-        xHatLoss[c] = criterion_out:forward(xHat, x_out)
 
-        embeddings[train_or_test]:sub(start, stop, 1,opts.nLatentDims):copy(encoder_out[iter])
+        xHatLoss[c] = criterion_out:forward(xHat, x_out)        
+        embeddings['test']:indexCopy(1, v, torch.Tensor(encoder_out[iter]:size()):copy(encoder_out[iter]))
 
         start = stop + 1
         c = c+1
     end
 
     loggerTest:add{opts.epoch, torch.mean(xHatLoss), torch.mean(labelLoss), torch.mean(zHatLoss)}
-    -- end
 
     dataProvider.opts.rotate = rotate_tmp
 
