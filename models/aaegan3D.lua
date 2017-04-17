@@ -182,27 +182,41 @@ function Model:createGenAdversary()
     if noise > 0 then
         self.adversaryGen:add(nn.WhiteNoise(0, noise))
     end
-    
     self.adversaryGen:add(nn.VolumetricConvolution(self.nChOut, ndf, kT, kW, kH, dT, dW, dH, padT, padW, padH))
     self.adversaryGen:add(nn.VolumetricBatchNormalization(ndf))  
     self.adversaryGen:add(nn.LeakyReLU(0.2, true))
     
+    if self.ganNoiseAllLayers and noise > 0 then
+        self.adversaryGen:add(nn.WhiteNoise(0, noise))
+    end
     self.adversaryGen:add(nn.VolumetricConvolution(ndf, ndf * 2, kT, kW, kH, dT, dW, dH, padT, padW, padH))
     self.adversaryGen:add(nn.VolumetricBatchNormalization(ndf * 2))
     self.adversaryGen:add(nn.LeakyReLU(0.2, true))
     
+    if self.ganNoiseAllLayers and noise > 0 then
+        self.adversaryGen:add(nn.WhiteNoise(0, noise))
+    end
     self.adversaryGen:add(nn.VolumetricConvolution(ndf * 2, ndf * 4, kT, kW, kH, dT, dW, dH, padT, padW, padH))
     self.adversaryGen:add(nn.VolumetricBatchNormalization(ndf * 4))
     self.adversaryGen:add(nn.LeakyReLU(0.2, true))
     
+    if self.ganNoiseAllLayers and noise > 0 then
+        self.adversaryGen:add(nn.WhiteNoise(0, noise))
+    end
     self.adversaryGen:add(nn.VolumetricConvolution(ndf * 4, ndf * 8, kT, kW, kH, dT, dW, dH, padT, padW, padH))
     self.adversaryGen:add(nn.VolumetricBatchNormalization(ndf * 8))
     self.adversaryGen:add(nn.LeakyReLU(0.2, true))
     
+    if self.ganNoiseAllLayers and noise > 0 then
+        self.adversaryGen:add(nn.WhiteNoise(0, noise))
+    end
     self.adversaryGen:add(nn.VolumetricConvolution(ndf * 8, ndf * 8, kT, kW, kH, dT, dW, dH, padT, padW, padH))
     self.adversaryGen:add(nn.VolumetricBatchNormalization(ndf * 8))
     self.adversaryGen:add(nn.LeakyReLU(0.2, true))
     
+    if self.ganNoiseAllLayers and noise > 0 then
+        self.adversaryGen:add(nn.WhiteNoise(0, noise))
+    end
     if self.nClasses > 0 then
         -- output for the class label
         self.adversaryGen:add(nn.VolumetricConvolution(ndf * 8, self.nClasses+1, 2,3, 4))
