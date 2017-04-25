@@ -48,6 +48,8 @@ cmd:option('-gpu1',              1, 'gpu for the encoder')
 cmd:option('-gpu2',              2, 'gpu for the encoder')
 cmd:option('-gpu3',              3, 'gpu for the encoder')
 cmd:option('-gpu',               -1, 'gpu for the everything(overrides other gpu settings')
+cmd:option('-cudnnBenchmark',    false, 'benchmark mode for cudnn')
+cmd:option('-cudnnFastest',      false, 'fastest mode for cudnn')
 
 -- data settings
 cmd:option('-imdir',             '/root/images/release_4_1_17/release_v2/aligned/2D', 'parent directory for images')
