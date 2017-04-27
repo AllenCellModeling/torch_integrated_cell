@@ -21,7 +21,7 @@ Once you're in the docker container, you can train the model with
 
 `bash train_model_2D.sh`
 
-This will tkae a while, probably about 12-18 hours.
+This will take a while, probably about 12-18 hours.
 
 ## Project website
 Example outputs of this model can be viewed at http://www.allencell.org
