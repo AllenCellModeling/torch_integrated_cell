@@ -1,5 +1,8 @@
 Torch Integrated Cell
 ===============================
+
+![Model Architecture](doc/images/model_arch.png?raw=true "Model Architecture")
+
 Image-driven generative cell modelling with adversarial autoencoders
 
 ## Installation
@@ -27,13 +30,14 @@ This will take a while, probably about 12-18 hours.
 Example outputs of this model can be viewed at http://www.allencell.org
 
 ## Citation
-If you find this code useful in your research, please consider citing the following paper::
+If you find this code useful in your research, please consider citing the following paper:
 
     @article{johnson2017generative,
        title={Generative Modeling with Conditional Autoencoders: Building an Integrated Cell},
        author={Gregory R. Johnson, Rory M. Donovan-Maiye, Mary M. Maleckar},
-       journal={arXiv preprint arXiv:some.numeric.id},
-       year={2017}
+       journal={arXiv preprint arXiv:1705.00092},
+       year={2017},
+       url={https://arxiv.org/abs/1705.00092}
     }
     
 ## Contact
