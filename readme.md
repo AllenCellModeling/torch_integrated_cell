@@ -2,6 +2,8 @@ Torch Integrated Cell
 ===============================
 Image-driven generative cell modelling with adversarial autoencoders
 
+![Model Architecture](doc/images/model_arch.png?raw=true "Model Architecture")
+
 ## Installation
 Installing on linux is recommended.
 
@@ -32,8 +34,9 @@ If you find this code useful in your research, please consider citing the follow
     @article{johnson2017generative,
        title={Generative Modeling with Conditional Autoencoders: Building an Integrated Cell},
        author={Gregory R. Johnson, Rory M. Donovan-Maiye, Mary M. Maleckar},
-       journal={arXiv preprint arXiv:some.numeric.id},
-       year={2017}
+       journal={arXiv preprint arXiv:1705.00092},
+       year={2017},
+       url={https://arxiv.org/abs/1705.00092}
     }
     
 ## Contact
