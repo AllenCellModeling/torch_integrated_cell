@@ -106,6 +106,24 @@ cutorch.manualSeed(opts.seed)
 -- Set up Torch
 print('Setting up')
 
+get_embeddings = function(encoder, dataProvider, train_or_test)
+    require 'paths'
+    
+    local ndat = dataProvider[train_or_test].labels:size(1)
+    local embeddings = torch.zeros(ndat, opts.nLatentDims)
+    
+    for j = 1, ndat do 
+        print('Getting embedding for ' .. j .. '/' .. ndat)
+        local img = dataProvider:getImages(torch.LongTensor{j,j}, train_or_test):cuda()
+        codes = encoder:forward(img)
+        
+        embeddings[{j}]:copy(codes[#codes][1])
+    end
+    
+    return embeddings
+end
+
+
 opts = setup.init(opts)
 print(opts)
 
@@ -133,24 +151,50 @@ end
 setup.getModel(opts)
 if opts.epoch ~= opts.nepochs then  
     learner.loop(ndat)
-
-    decoder = nil  
-    adversary = nil
-    adversaryGen = nil
 end
 
-shapeEncoder = encoder
-shapeEncoder:evaluate()
+local shape_embeddings = nil
+embedding_path_final = opts.saveDir .. '/final_embeddings.t7'
 
-for i = 1,#shapeEncoder.modules do
-    shapeEncoder.modules[i]:clearState()
+if not paths.filep(embedding_path_final) then
+    encoder:evaluate()
+    shape_embeddings = {}
+    shape_embeddings['train'] = get_embeddings(encoder, dataProvider, 'train')
+    shape_embeddings['test'] = get_embeddings(encoder, dataProvider, 'test')
+
+    print(shape_embeddings)
+    torch.save(embedding_path_final, shape_embeddings)
 end
+
+decoder = nil  
+adversary = nil
+adversaryGen = nil
+encoder = nil
+
+optAdvGen = nil
+optAdv = nil
+optEnc = nil
+optDec = nil
+
+stateAdvGen = nil
+stateAdv = nil
+stateEnc = nil
+stateDec = nil
+
+-- shapeEncoder = encoder
+-- shapeEncoder:evaluate()
+
+-- for i = 1,#shapeEncoder.modules do
+--     shapeEncoder.modules[i]:clearState()
+-- end
 
 collectgarbage()
 
 shapeDataProvider = dataProvider
 
-shape_embeddings = torch.load(opts.save.tmpEmbeddings)
+-- shape_embeddings = torch.load(opts.save.tmpEmbeddings)
+shape_embeddings = torch.load(embedding_path_final)
+print(shape_embeddings)
 
 
 opts.saveDir = opts.saveDir .. '_pattern'
@@ -162,6 +206,8 @@ opts.nChOut = opts.channel_inds_in:size(1)
 opts.nChIn = opts.channel_inds_out:size(1)
 
 opts.nClasses = shapeDataProvider:getLabels(torch.LongTensor{1}, 'train'):size()[2]
+shapeDataProvider = nil
+
 opts.nOther = opts.nLatentDims
 
 criterion = criterion_label
@@ -173,6 +219,12 @@ function dataProvider:getCodes(indices, train_or_test)
     return codes
 end
 
+ndat = dataProvider['train'].labels:size(1)
+opts.ndat = ndat
+
+opts.cudnnBenchmark = false
+opts.cudnnFastest = false
+
 setup.getModel(opts)
 if opts.epoch ~= opts.nepochs then  
     learner.loop(ndat)
@@ -180,6 +232,8 @@ end
 
 encoder:evaluate()
 decoder:evaluate()
+
+
 
 print_images = function(encoder, decoder, dataProvider, train_or_test, save_dir)
         
