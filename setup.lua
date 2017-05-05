@@ -231,7 +231,7 @@ function setup.getModel(opts)
         gpuIDs = torch.zeros(#decoder.modules):fill(opts.gpu2)
         decoder = setGpuID(decoder, gpuIDs)
 
-        gpuIDs = torch.zeros(#adversary.modules):fill(opts.gpu2)
+        gpuIDs = torch.zeros(#adversary.modules):fill(opts.gpu3)
         adversary = setGpuID(adversary, gpuIDs)
 
         gpuIDs = torch.zeros(#adversaryGen.modules):fill(opts.gpu3)

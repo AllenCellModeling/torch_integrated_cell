@@ -173,7 +173,7 @@ function learner.loop(nIn)
         minimaxEncLoss = criterion_adv:forward(predFake, yReal)
         local gradMinimaxLoss = criterion_adv:backward(predFake, yReal)
         local gradMinimax = adversary:updateGradInput(encoder.output[c], gradMinimaxLoss) -- Do not calculate gradient wrt adversary parameters
-        gradLosses[c] = gradMinimax*opts.advLatentRatio
+        gradLosses[c] = gradMinimax:mul(opts.advLatentRatio)
 
         encoder:backward(x_in, gradLosses)
 
@@ -202,7 +202,7 @@ function learner.loop(nIn)
 
         adversaryGen:clearState()
 
-        decoder:backward(zFake, df_dg*opts.advGenRatio)
+        decoder:backward(zFake, df_dg:mul(opts.advGenRatio))
         return minimaxDecLoss, gradParametersG
     end
     
@@ -219,7 +219,7 @@ function learner.loop(nIn)
         local df_do = criterion:backward(output, label)
         df_dg = adversaryGen:updateGradInput(xHat, df_do)
 
-        decoder:backward(codes, df_dg*opts.advGenRatio)
+        decoder:backward(codes, df_dg:mul(opts.advGenRatio))
         return minimaxDecLoss, gradParametersG
     end    
     
@@ -350,10 +350,10 @@ function plotStuff()
     rotate_tmp = opts.rotate
     dataProvider.opts.rotate = false
 
-    local x_in, x_out = dataProvider:getImages(torch.linspace(1,10,10):long(), 'train')
+    local x_in, x_out = dataProvider:getImages(torch.linspace(1,opts.batchSize,opts.batchSize):long(), 'train')
     recon_train = evalIm(x_in,x_out, opts)
 
-    local x_in, x_out = dataProvider:getImages(torch.linspace(1,10,10):long(), 'test')
+    local x_in, x_out = dataProvider:getImages(torch.linspace(1,opts.batchSize,opts.batchSize):long(), 'test')
     recon_test = evalIm(x_in,x_out, opts)
 
     local reconstructions = torch.cat(recon_train, recon_test,2)
