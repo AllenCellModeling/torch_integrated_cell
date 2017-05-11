@@ -12,7 +12,7 @@ Installing on linux is recommended.
 Running on docker is recommended, though not required.
 
 - install torch on docker / nvidia-docker as in e.g. this guide: https://github.com/gregjohnso/dl-docker
-- download the training images from s3://aics.integrated.cell.arxiv.paper.data
+- download the training images: `aws s3 cp s3://aics.integrated.cell.arxiv.paper.data . --recursive --no-sign-request`
 
 ### Steps:
 After you clone this repository, you will need to edit the mount points for the images in `run_docker.sh` to point to where you saved them.
