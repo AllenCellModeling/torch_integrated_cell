@@ -3,7 +3,7 @@ Torch Integrated Cell
 
 ![Model Architecture](doc/images/model_arch.png?raw=true "Model Architecture")
 
-Image-driven generative cell modelling with adversarial autoencoders
+Image-driven generative cell modelling with adversarial autoencoders: https://arxiv.org/abs/1705.00092
 
 ## Installation
 Installing on linux is recommended.
