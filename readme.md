@@ -5,7 +5,7 @@ Torch Integrated Cell
 
 Image-driven generative cell modelling with adversarial autoencoders: https://arxiv.org/abs/1705.00092
 
-## For the updated 3D version, please see:  
+## For the *updated 3D version*, please see:  
 **Building a 3D Integrated Cell**  
 Manuscript: https://www.biorxiv.org/content/early/2017/12/21/238378  
 GitHub: https://github.com/AllenCellModeling/pytorch_integrated_cell  
